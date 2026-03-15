@@ -585,7 +585,7 @@ function SubmitForm({ onSuccess, resetKey }) {
             <div>
               <div className="w-12 h-12 bg-[#BCD9A2]/40 rounded-2xl flex items-center justify-center mx-auto mb-3 text-[#6D9E51]"><IconUpload /></div>
               <p className="font-semibold text-gray-600 text-sm">Seret file ke sini atau klik untuk pilih</p>
-              <p className="text-gray-400 text-xs mt-1">Format PDF, maksimal 10MB</p>
+              <p className="text-gray-400 text-xs mt-1">Format PDF, maksimal 2MB</p>
             </div>
           )}
         </div>
@@ -686,36 +686,63 @@ function Navbar({ activeSection }) {
         </button>
 
         {/* Mobile Hamburger */}
-        <button className="md:hidden text-gray-700 p-2" onClick={() => setMobileOpen(v => !v)}>
-          <div className="space-y-1.5">
-            <span className={cn("block w-6 h-0.5 bg-gray-700 transition-all", mobileOpen && "rotate-45 translate-y-2")} />
-            <span className={cn("block w-6 h-0.5 bg-gray-700 transition-all", mobileOpen && "opacity-0")} />
-            <span className={cn("block w-6 h-0.5 bg-gray-700 transition-all", mobileOpen && "-rotate-45 -translate-y-2")} />
+        <button
+          className="md:hidden relative w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[#FEFFD3] transition-colors"
+          onClick={() => setMobileOpen(v => !v)}
+          aria-label="Toggle menu"
+        >
+          <div className="w-5 h-4 flex flex-col justify-between">
+            <span className="block h-0.5 bg-gray-700 rounded-full origin-center transition-all duration-300 ease-in-out"
+              style={{ transform: mobileOpen ? "translateY(7px) rotate(45deg)" : "none" }} />
+            <span className="block h-0.5 bg-gray-700 rounded-full transition-all duration-200 ease-in-out"
+              style={{ opacity: mobileOpen ? 0 : 1, transform: mobileOpen ? "scaleX(0)" : "scaleX(1)" }} />
+            <span className="block h-0.5 bg-gray-700 rounded-full origin-center transition-all duration-300 ease-in-out"
+              style={{ transform: mobileOpen ? "translateY(-7px) rotate(-45deg)" : "none" }} />
           </div>
         </button>
       </div>
 
-      {/* Mobile Menu */}
-      {mobileOpen && (
-        <div className="md:hidden bg-white/95 backdrop-blur border-t border-gray-100 px-4 py-4 space-y-1 shadow-lg">
+      {/* Mobile Menu — always rendered, animated via max-height + opacity */}
+      <div
+        className="md:hidden overflow-hidden transition-all duration-300 ease-in-out"
+        style={{
+          maxHeight: mobileOpen ? "480px" : "0px",
+          opacity:   mobileOpen ? 1 : 0,
+        }}
+      >
+        <div className="bg-white/95 backdrop-blur-xl border-t border-gray-100 shadow-xl px-4 pt-3 pb-4 space-y-1">
           {links.map((l, i) => (
             <button
               key={l}
-              className="block w-full text-left px-4 py-3 rounded-xl text-gray-700 hover:bg-[#FEFFD3] hover:text-[#6D9E51] font-medium transition-all"
-              onClick={() => { document.getElementById(anchors[i])?.scrollIntoView({ behavior: "smooth" }); setMobileOpen(false); }}
+              className="flex items-center w-full text-left px-4 py-3 rounded-xl text-gray-700 hover:bg-[#FEFFD3] hover:text-[#6D9E51] font-semibold transition-all duration-200 text-sm"
+              style={{
+                transitionDelay: mobileOpen ? `${i * 40}ms` : "0ms",
+                transform: mobileOpen ? "translateX(0)" : "translateX(-8px)",
+                opacity:   mobileOpen ? 1 : 0,
+              }}
+              onClick={() => {
+                document.getElementById(anchors[i])?.scrollIntoView({ behavior: "smooth" });
+                setMobileOpen(false);
+              }}
             >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#6D9E51] mr-3 flex-shrink-0" />
               {l}
             </button>
           ))}
           <button
-            className="flex items-center gap-2 w-full px-4 py-3 rounded-xl bg-gradient-to-r from-[#6D9E51] to-[#4a7a36] text-white font-bold transition-all mt-2"
+            className="flex items-center gap-2 w-full px-4 py-3 rounded-xl bg-gradient-to-r from-[#6D9E51] to-[#4a7a36] text-white font-bold text-sm transition-all duration-200 mt-1 hover:shadow-lg hover:-translate-y-0.5"
+            style={{
+              transitionDelay: mobileOpen ? `${links.length * 40}ms` : "0ms",
+              transform: mobileOpen ? "translateX(0)" : "translateX(-8px)",
+              opacity:   mobileOpen ? 1 : 0,
+            }}
             onClick={() => { goToLogin(); setMobileOpen(false); }}
           >
             <IconLogin />
-            Login
+            Login ke Sistem
           </button>
         </div>
-      )}
+      </div>
     </nav>
   );
 }
@@ -1004,7 +1031,7 @@ export default function PortalPublic() {
                 <ul className="space-y-3">
                   {[
                     "File harus dalam format PDF",
-                    "Ukuran maksimal file adalah 10MB",
+                    "Ukuran maksimal file adalah 2MB",
                     "Pastikan data diri terisi dengan benar",
                     "Simpan Tracking ID untuk pelacakan",
                     "Surat diproses dalam 1-3 hari kerja",
