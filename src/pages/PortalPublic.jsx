@@ -1050,10 +1050,10 @@ export default function PortalPublic() {
                 <h4 className="font-black text-gray-900 mb-4">Butuh Bantuan?</h4>
                 <div className="space-y-3 text-sm">
                   {[
-                    { icon: <IconPhone />, label: "Telepon", val: "(0761) 123-456" },
-                    { icon: <IconMail />, label: "Email", val: "surat@pemkopekanbaru.go.id" },
-                    { icon: <IconMapPin />, label: "Alamat", val: "Jl. Sudirman No. 464, Pekanbaru" },
-                    { icon: <IconClock />, label: "Jam Kerja", val: "Senin-Jumat, 08.00-16.00" },
+                    { icon: <IconPhone />, label: "Telepon", val: "(0761) 38757" },
+                    { icon: <IconMail />, label: "Email", val: "tatausaha.mtsn1pku@gmail.com" },
+                    { icon: <IconMapPin />, label: "Alamat", val: "Jl. Amal Hamzah No.1, Cinta Raja, Kec. Sail, Kota Pekanbaru, Riau 28127" },
+                    { icon: <IconClock />, label: "Jam Kerja", val: "Senin-Jumat, 07.00-17.00" },
                   ].map((c, i) => (
                     <div key={i} className="flex items-center gap-3">
                       <div className="text-[#6D9E51]">{c.icon}</div>
