@@ -1035,6 +1035,7 @@ export default function PortalPublic() {
                     "Pastikan data diri terisi dengan benar",
                     "Simpan Tracking ID untuk pelacakan",
                     "Surat diproses dalam 1-3 hari kerja",
+                    "Surat balasan akan dikirim ke email Anda",
                   ].map((info, i) => (
                     <li key={i} className="flex items-start gap-2.5 text-sm text-[#FEFFD3]">
                       <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-white">
