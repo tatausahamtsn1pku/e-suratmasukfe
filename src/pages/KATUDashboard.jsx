@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Cell } from "recharts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const API_BASE = "https://e-suratmasuk-production.up.railway.app";
@@ -14,7 +14,35 @@ const STATUS_MAP = {
   AWAITING_REPLY_UMUM:     { label: "Menunggu Balasan dari Staff",           color: "text-cyan-600",   bg: "bg-cyan-50",    border: "border-cyan-200",   dot: "#0891b2" },
   AWAITING_REPLY_KHUSUS:   { label: "Menunggu Balasan dari Kepala Madrasah", color: "text-indigo-600", bg: "bg-indigo-50",  border: "border-indigo-200", dot: "#4f46e5" },
   COMPLETED:               { label: "Selesai & Dibalas",                     color: "text-[#4a7a36]",  bg: "bg-[#FEFFD3]", border: "border-[#BCD9A2]",  dot: "#6D9E51" },
+  ARCHIVED:                { label: "Diarsipkan",                            color: "text-gray-600",   bg: "bg-gray-50",   border: "border-gray-200",   dot: "#6b7280" },
 };
+
+// ─── Chart palette ────────────────────────────────────────────────────────────
+const STATUS_CHART_COLORS = {
+  PENDING_VALIDATION:      "#FAC775",
+  REJECTED:                "#F09595",
+  AWAITING_KATU_REVIEW:    "#85B7EB",
+  AWAITING_KAMAD_APPROVAL: "#AFA9EC",
+  DISPATCHED_TO_STAFF:     "#F0997B",
+  AWAITING_REPLY_UMUM:     "#5DCAA5",
+  AWAITING_REPLY_KHUSUS:   "#97C459",
+  COMPLETED:               "#639922",
+  ARCHIVED:                "#B4B2A9",
+};
+
+const STATUS_CHART_LABELS = {
+  PENDING_VALIDATION:      "Menunggu Validasi",
+  REJECTED:                "Ditolak",
+  AWAITING_KATU_REVIEW:    "Proses KATU",
+  AWAITING_KAMAD_APPROVAL: "Proses Kamad",
+  DISPATCHED_TO_STAFF:     "Diproses Staff",
+  AWAITING_REPLY_UMUM:     "Menunggu Balas (Umum)",
+  AWAITING_REPLY_KHUSUS:   "Menunggu Balas (Khusus)",
+  COMPLETED:               "Selesai",
+  ARCHIVED:                "Diarsipkan",
+};
+
+const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 const getHeaders = () => {
@@ -49,7 +77,7 @@ const api = {
   getSuratHistory:    ()         => fetch(`${API_BASE}/api/surat/history`,                      { headers: getHeaders() }).then(r => r.json()),
   getSuratDetail:     (id)       => fetch(`${API_BASE}/api/surat/detail/${id}`,                 { headers: getHeaders() }).then(r => r.json()),
   forwardToKamad:     (id, fd)   => fetch(`${API_BASE}/api/surat/forward-to-kamad/${id}`,       { method: "PATCH",  headers: getHeadersNoContentType(), body: fd }).then(r => r.json()),
-  getAgenda:          ()         => fetch(`${API_BASE}/api/surat/agenda`,                       { headers: getHeaders() }).then(r => r.json()),
+  getAgendaMasuk:     ()         => fetch(`${API_BASE}/api/agenda/masuk`,                       { headers: getHeaders() }).then(r => r.json()),
   approveAgenda:      (id)       => fetch(`${API_BASE}/api/surat/agenda/approve/${id}`,         { method: "PATCH",  headers: getHeaders() }).then(r => r.json()),
 };
 
@@ -271,6 +299,63 @@ function MiniCalendar() {
   );
 }
 
+// ─── Chart Helpers ────────────────────────────────────────────────────────────
+function buildMonthlyMap(items = []) {
+  const map = {};
+  items.forEach(item => {
+    const d = new Date(item.createdAt);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    if (!map[key]) map[key] = { month: MONTHS_ID[d.getMonth()], total: 0, completed: 0, _y: d.getFullYear(), _m: d.getMonth() };
+    map[key].total += 1;
+    if (item.status === "COMPLETED") map[key].completed += 1;
+  });
+  return Object.values(map)
+    .sort((a, b) => a._y !== b._y ? a._y - b._y : a._m - b._m)
+    .slice(-8);
+}
+
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl shadow-lg px-4 py-3 text-xs min-w-[130px]">
+      <p className="font-bold text-gray-700 mb-2">{label}</p>
+      {payload.map((p, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 mb-1 last:mb-0">
+          <span className="flex items-center gap-1.5 text-gray-500">
+            <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: p.color }} />
+            {p.name}
+          </span>
+          <span className="font-semibold text-gray-800">{p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ChartCard({ title, subtitle, legend, children, delay = 0 }) {
+  return (
+    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm" style={{ animation: `fadeInUp 0.5s ease-out ${delay}ms both` }}>
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+        <div>
+          <p className="font-black text-gray-800 text-sm">{title}</p>
+          {subtitle && <p className="text-gray-400 text-xs mt-0.5">{subtitle}</p>}
+        </div>
+        {legend && (
+          <div className="flex items-center gap-3 flex-wrap">
+            {legend.map((l, i) => (
+              <span key={i} className="flex items-center gap-1.5 text-xs text-gray-400">
+                <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: l.color }} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 // ─── Dashboard View ───────────────────────────────────────────────────────────
 function DashboardView() {
   const [stats, setStats] = useState({});
@@ -281,28 +366,38 @@ function DashboardView() {
     api.getDashboardStats().then(d => { setStats(d?.data ?? {}); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
-  const persentase = Array.isArray(stats?.persentaseStatus) ? stats.persentaseStatus : [];
-  const timeline   = Array.isArray(stats?.timelineSurat)    ? stats.timelineSurat    : [];
-  const getCount   = (key) => persentase.find(p => p.status === key)?._count?.id ?? 0;
-  const totalSurat = persentase.reduce((a, p) => a + (p._count?.id ?? 0), 0);
+  const persentaseStatus = Array.isArray(stats?.persentaseStatus) ? stats.persentaseStatus : [];
+  const timelineMasuk    = Array.isArray(stats?.timelineSurat?.masuk)  ? stats.timelineSurat.masuk  : [];
+  const timelineKeluar   = Array.isArray(stats?.timelineSurat?.keluar) ? stats.timelineSurat.keluar : [];
+  const statsAgenda      = stats?.statsAgenda ?? {};
+
+  const getCount   = (key) => persentaseStatus.find(p => p.status === key)?._count?.id ?? 0;
+  const totalSurat = persentaseStatus.reduce((a, p) => a + (p._count?.id ?? 0), 0);
+
+  // Chart 1 — distribusi status
+  const statusChartData = persentaseStatus
+    .filter(p => (p._count?.id ?? 0) > 0)
+    .map(p => ({
+      name: STATUS_CHART_LABELS[p.status] || p.status,
+      Jumlah: p._count?.id ?? 0,
+      fill: STATUS_CHART_COLORS[p.status] || "#B4B2A9",
+    }));
+
+  // Chart 2 — tren surat masuk
+  const masukChartData = buildMonthlyMap(timelineMasuk);
+
+  // Chart 3 — tren surat keluar (balasan)
+  const keluarChartData = buildMonthlyMap(timelineKeluar);
 
   const statCards = [
-    { label: "Total Surat Masuk",     value: totalSurat,                        sub: "Semua status",             icon: <Ic.Mail />,       accent: "#6D9E51" },
-    { label: "Menunggu Review KATU",  value: getCount("AWAITING_KATU_REVIEW"),  sub: "Perlu ditindaklanjuti",    icon: <Ic.Stamp />,      accent: "#2563eb" },
-    { label: "Diteruskan ke Kamad",   value: getCount("AWAITING_KAMAD_APPROVAL"),sub: "Sudah diberi TTD",        icon: <Ic.Forward />,    accent: "#9333ea" },
-    { label: "Selesai & Dibalas",     value: getCount("COMPLETED"),             sub: "Surat telah ditangani",    icon: <Ic.ShieldCheck />,accent: "#4a7a36" },
+    { label: "Total Surat Masuk",    value: totalSurat,                         sub: "Semua status",          icon: <Ic.Mail />,       accent: "#6D9E51" },
+    { label: "Menunggu Review KATU", value: getCount("AWAITING_KATU_REVIEW"),   sub: "Perlu ditindaklanjuti", icon: <Ic.Stamp />,      accent: "#2563eb" },
+    { label: "Diteruskan ke Kamad",  value: getCount("AWAITING_KAMAD_APPROVAL"),sub: "Sudah diberi TTD",      icon: <Ic.Forward />,    accent: "#9333ea" },
+    { label: "Selesai & Dibalas",    value: getCount("COMPLETED"),              sub: "Surat telah ditangani", icon: <Ic.ShieldCheck />,accent: "#4a7a36" },
   ];
 
-  const monthNames = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-  const monthMap = {};
-  timeline.forEach(item => {
-    const d = new Date(item.createdAt);
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
-    if (!monthMap[key]) monthMap[key] = { month: monthNames[d.getMonth()], total: 0, completed: 0 };
-    monthMap[key].total += 1;
-    if (item.status === "COMPLETED") monthMap[key].completed += 1;
-  });
-  const chartData = Object.values(monthMap).slice(-8);
+  const skeletonChart   = <div className="h-52 bg-gray-50 rounded-xl animate-pulse" />;
+  const skeletonChartSm = <div className="h-48 bg-gray-50 rounded-xl animate-pulse" />;
 
   return (
     <div className="space-y-6">
@@ -311,9 +406,14 @@ function DashboardView() {
         <p className="text-gray-400 text-sm mt-0.5">Selamat datang, <span className="font-semibold text-gray-600">{user.jabatan}</span> 👋</p>
       </div>
 
+      {/* Stat cards */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 h-28 animate-pulse"><div className="h-3 bg-gray-100 rounded w-2/3 mb-3" /><div className="h-7 bg-gray-100 rounded w-1/3" /></div>)}
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 h-28 animate-pulse">
+              <div className="h-3 bg-gray-100 rounded w-2/3 mb-3" /><div className="h-7 bg-gray-100 rounded w-1/3" />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -321,35 +421,151 @@ function DashboardView() {
         </div>
       )}
 
+      {/* Row 1: Distribusi Status + Kalender */}
       <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-gray-100 shadow-sm" style={{ animation: "fadeInUp 0.5s ease-out 300ms both" }}>
-          <div className="flex items-center justify-between mb-5">
-            <h4 className="font-black text-gray-800">Statistik Surat</h4>
-            <div className="flex items-center gap-4 text-xs text-gray-400">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#6D9E51] inline-block" />Masuk</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#BCD9A2] inline-block" />Selesai</span>
-            </div>
-          </div>
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={chartData} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", fontSize: 12 }} cursor={{ fill: "rgba(109,158,81,0.05)" }} />
-                <Bar dataKey="total" fill="#6D9E51" radius={[6,6,0,0]} name="Surat Masuk" />
-                <Bar dataKey="completed" fill="#BCD9A2" radius={[6,6,0,0]} name="Selesai" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-56 flex items-center justify-center">
-              <div className="text-center"><div className="text-4xl mb-2">📊</div><p className="text-gray-400 text-sm">Data statistik belum tersedia</p></div>
-            </div>
-          )}
+        <div className="lg:col-span-2">
+          <ChartCard
+            title="Distribusi Status Surat"
+            subtitle="Jumlah surat per status saat ini"
+            delay={200}
+          >
+            {loading ? skeletonChart : statusChartData.length === 0 ? (
+              <div className="h-52 flex flex-col items-center justify-center gap-2 text-gray-400">
+                <span className="text-3xl">📊</span>
+                <p className="text-xs font-medium">Data belum tersedia</p>
+              </div>
+            ) : (
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={statusChartData} barSize={26} margin={{ top: 4, right: 8, left: -16, bottom: 24 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10, fill: "#9ca3af" }}
+                      axisLine={false} tickLine={false}
+                      interval={0} angle={-30} textAnchor="end" height={56}
+                    />
+                    <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(109,158,81,0.05)", radius: 6 }} />
+                    <Bar dataKey="Jumlah" radius={[6, 6, 0, 0]}>
+                      {statusChartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </ChartCard>
         </div>
         <MiniCalendar />
       </div>
 
+      {/* Row 2: Tren Surat Masuk + Tren Surat Keluar */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <ChartCard
+          title="Tren Surat Masuk"
+          subtitle="Volume surat masuk & penyelesaian (8 bulan terakhir)"
+          legend={[
+            { color: "#378ADD", label: "Surat masuk" },
+            { color: "#1D9E75", label: "Selesai" },
+          ]}
+          delay={300}
+        >
+          {loading ? skeletonChartSm : masukChartData.length === 0 ? (
+            <div className="h-48 flex flex-col items-center justify-center gap-2 text-gray-400">
+              <span className="text-3xl">📨</span>
+              <p className="text-xs font-medium">Belum ada data surat masuk</p>
+            </div>
+          ) : (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={masukChartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gMasukKATU" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#378ADD" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#378ADD" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gSelesaiKATU" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#1D9E75" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#1D9E75" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="total" name="Surat Masuk"
+                    stroke="#378ADD" strokeWidth={2} fill="url(#gMasukKATU)"
+                    dot={{ r: 4, fill: "#378ADD", strokeWidth: 0 }}
+                    activeDot={{ r: 6, fill: "#378ADD", strokeWidth: 2, stroke: "#fff" }} />
+                  <Area type="monotone" dataKey="completed" name="Selesai"
+                    stroke="#1D9E75" strokeWidth={2} fill="url(#gSelesaiKATU)"
+                    dot={{ r: 4, fill: "#1D9E75", strokeWidth: 0 }}
+                    activeDot={{ r: 6, fill: "#1D9E75", strokeWidth: 2, stroke: "#fff" }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ChartCard>
+
+        <ChartCard
+          title="Tren Surat Keluar"
+          subtitle="Volume balasan & surat keluar (8 bulan terakhir)"
+          legend={[{ color: "#BA7517", label: "Surat keluar" }]}
+          delay={380}
+        >
+          {loading ? skeletonChartSm : keluarChartData.length === 0 ? (
+            <div className="h-48 flex flex-col items-center justify-center gap-2 text-gray-400">
+              <span className="text-3xl">📤</span>
+              <p className="text-xs font-medium">Belum ada data surat keluar</p>
+            </div>
+          ) : (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={keluarChartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gKeluarKATU" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#BA7517" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#BA7517" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="total" name="Surat Keluar"
+                    stroke="#BA7517" strokeWidth={2} fill="url(#gKeluarKATU)"
+                    dot={{ r: 4, fill: "#BA7517", strokeWidth: 0 }}
+                    activeDot={{ r: 6, fill: "#BA7517", strokeWidth: 2, stroke: "#fff" }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ChartCard>
+      </div>
+
+      {/* Agenda summary bar */}
+      {!loading && (statsAgenda.masuk !== undefined || statsAgenda.keluar !== undefined) && (
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-6 flex-wrap"
+          style={{ animation: "fadeInUp 0.5s ease-out 450ms both" }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600"><Ic.Book /></div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Total Agenda Masuk</p>
+              <p className="text-xl font-black text-gray-900"><AnimNum val={statsAgenda.masuk ?? 0} /></p>
+            </div>
+          </div>
+          <div className="w-px h-10 bg-gray-100 flex-shrink-0" />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600"><Ic.Mail /></div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Total Agenda Keluar</p>
+              <p className="text-xl font-black text-gray-900"><AnimNum val={statsAgenda.keluar ?? 0} /></p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Legenda status */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm" style={{ animation: "fadeInUp 0.5s ease-out 500ms both" }}>
         <h4 className="font-black text-gray-800 mb-4">Legenda Status Surat</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
@@ -893,7 +1109,7 @@ function AgendaView({ toast }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.getAgenda().then(d => {
+    api.getAgendaMasuk().then(d => {
       const data = d?.data ?? d ?? [];
       setAgenda(Array.isArray(data) ? data : []);
       setLoading(false);
@@ -905,7 +1121,8 @@ function AgendaView({ toast }) {
   const handleApprove = async () => {
     setActionLoading(true);
     try {
-      const res = await api.approveAgenda(approveItem.id);
+      const itemId = approveItem._id || approveItem.id;
+      const res = await api.approveAgenda(itemId);
       if (res.success === false) throw new Error(res.message || "Gagal menyetujui agenda");
       toast.add("Agenda berhasil disetujui!");
       setApproveItem(null); load();
@@ -971,7 +1188,7 @@ function AgendaView({ toast }) {
                 </tr></thead>
                 <tbody className="divide-y divide-gray-50">
                   {filtered.map((a, i) => (
-                    <tr key={a.id || i}
+                    <tr key={a._id || a.id || i}
                       className={`transition-colors group ${!a.isAgendaDisetujuiKATU ? "hover:bg-yellow-50/40 cursor-pointer" : "hover:bg-[#FEFFD3]/20"}`}
                       style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
                       <td className="px-5 py-3.5">
@@ -1017,7 +1234,7 @@ function AgendaView({ toast }) {
             {/* Mobile cards */}
             <div className="md:hidden divide-y divide-gray-50">
               {filtered.map((a, i) => (
-                <div key={a.id || i} className="p-4 space-y-2.5"
+                <div key={a._id || a.id || i} className="p-4 space-y-2.5"
                   style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">

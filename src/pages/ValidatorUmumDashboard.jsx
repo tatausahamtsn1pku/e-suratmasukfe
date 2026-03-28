@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Area, AreaChart, Cell,
+} from "recharts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const API_BASE = "https://e-suratmasuk-production.up.railway.app";
@@ -14,7 +17,35 @@ const STATUS_MAP = {
   AWAITING_REPLY_UMUM:     { label: "Menunggu Balasan dari Staff",           color: "text-cyan-600",   bg: "bg-cyan-50",    border: "border-cyan-200",   dot: "#0891b2" },
   AWAITING_REPLY_KHUSUS:   { label: "Menunggu Balasan dari Kepala Madrasah", color: "text-indigo-600", bg: "bg-indigo-50",  border: "border-indigo-200", dot: "#4f46e5" },
   COMPLETED:               { label: "Selesai & Dibalas",                     color: "text-[#4a7a36]",  bg: "bg-[#FEFFD3]", border: "border-[#BCD9A2]",  dot: "#6D9E51" },
+  ARCHIVED:                { label: "Diarsipkan",                            color: "text-gray-600",   bg: "bg-gray-50",   border: "border-gray-200",   dot: "#6b7280" },
 };
+
+// ─── Chart palette ────────────────────────────────────────────────────────────
+const STATUS_CHART_COLORS = {
+  PENDING_VALIDATION:      "#FAC775",
+  REJECTED:                "#F09595",
+  AWAITING_KATU_REVIEW:    "#85B7EB",
+  AWAITING_KAMAD_APPROVAL: "#AFA9EC",
+  DISPATCHED_TO_STAFF:     "#F0997B",
+  AWAITING_REPLY_UMUM:     "#5DCAA5",
+  AWAITING_REPLY_KHUSUS:   "#97C459",
+  COMPLETED:               "#639922",
+  ARCHIVED:                "#B4B2A9",
+};
+
+const STATUS_CHART_LABELS = {
+  PENDING_VALIDATION:      "Menunggu Validasi",
+  REJECTED:                "Ditolak",
+  AWAITING_KATU_REVIEW:    "Proses KATU",
+  AWAITING_KAMAD_APPROVAL: "Proses Kamad",
+  DISPATCHED_TO_STAFF:     "Diproses Staff",
+  AWAITING_REPLY_UMUM:     "Menunggu Balas (Umum)",
+  AWAITING_REPLY_KHUSUS:   "Menunggu Balas (Khusus)",
+  COMPLETED:               "Selesai",
+  ARCHIVED:                "Diarsipkan",
+};
+
+const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 const getHeaders = () => {
@@ -44,11 +75,22 @@ const getUserInfo = () => {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 const api = {
-  getDashboardStats: ()       => fetch(`${API_BASE}/api/dashboard/stats`,                 { headers: getHeaders() }).then(r => r.json()),
-  getCalendar:       (date)   => fetch(`${API_BASE}/api/dashboard/calendar?date=${date}`, { headers: getHeaders() }).then(r => r.json()),
-  getSuratHistory:   ()       => fetch(`${API_BASE}/api/surat/history`,                   { headers: getHeaders() }).then(r => r.json()),
-  getSuratDetail:    (id)     => fetch(`${API_BASE}/api/surat/detail/${id}`,              { headers: getHeaders() }).then(r => r.json()),
-  replySurat:        (id, fd) => fetch(`${API_BASE}/api/surat/reply/${id}`,               { method: "POST", headers: getHeadersNoContentType(), body: fd }).then(r => r.json()),
+  getDashboardStats:  ()              => fetch(`${API_BASE}/api/dashboard/stats`,                   { headers: getHeaders() }).then(r => r.json()),
+  getCalendar:        (date)          => fetch(`${API_BASE}/api/dashboard/calendar?date=${date}`,   { headers: getHeaders() }).then(r => r.json()),
+  getSuratHistory:    ()              => fetch(`${API_BASE}/api/surat/history`,                     { headers: getHeaders() }).then(r => r.json()),
+  getSuratDetail:     (id)            => fetch(`${API_BASE}/api/surat/detail/${id}`,                { headers: getHeaders() }).then(r => r.json()),
+  replySurat:         (id, fd)        => fetch(`${API_BASE}/api/surat/reply/${id}`,                 { method: "POST",  headers: getHeadersNoContentType(), body: fd }).then(r => r.json()),
+  // ── Agenda Masuk ──────────────────────────────────────────────────────────
+  getAgendaMasuk:     ()              => fetch(`${API_BASE}/api/agenda/masuk`,                      { headers: getHeaders() }).then(r => r.json()),
+  updateAgendaMasuk:  (id, body)      => fetch(`${API_BASE}/api/surat/agenda-masuk/${id}`,          { method: "PUT",   headers: getHeaders(), body: JSON.stringify(body) }).then(r => r.json()),
+  // ── Agenda Keluar ─────────────────────────────────────────────────────────
+  getAgendaKeluar:    ()              => fetch(`${API_BASE}/api/agenda/keluar`,                     { headers: getHeaders() }).then(r => r.json()),
+  updateAgendaKeluar: (id, body)      => fetch(`${API_BASE}/api/surat-keluar/${id}`,                { method: "PUT",   headers: getHeaders(), body: JSON.stringify(body) }).then(r => r.json()),
+  deleteAgendaKeluar: (id)            => fetch(`${API_BASE}/api/surat-keluar/${id}`,                { method: "DELETE",headers: getHeaders() }).then(r => r.json()),
+  // ── Arsip ─────────────────────────────────────────────────────────────────
+  getArsipMasuk:      ()              => fetch(`${API_BASE}/api/archives/masuk`,                    { headers: getHeaders() }).then(r => r.json()),
+  getArsipKeluar:     ()              => fetch(`${API_BASE}/api/archives/keluar`,                   { headers: getHeaders() }).then(r => r.json()),
+  archiveSurat:       (id, tipe)      => fetch(`${API_BASE}/api/surat/archive/${id}?tipe=${tipe}`,  { method: "PATCH", headers: getHeaders() }).then(r => r.json()),
 };
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -70,7 +112,12 @@ const Ic = {
   Upload:       () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
   Reply:        () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>,
   ShieldCheck:  () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>,
-  SendHorizonal: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>,
+  SendHorizonal:() => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>,
+  Archive:      () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>,
+  Book:         () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-5 h-5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+  Edit:         () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  Send:         () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
+  Info:         () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
 };
 
 // ─── Animated Number ──────────────────────────────────────────────────────────
@@ -279,9 +326,66 @@ function MiniCalendar() {
   );
 }
 
+// ─── Chart helpers ────────────────────────────────────────────────────────────
+function buildMonthlyMap(items = []) {
+  const map = {};
+  items.forEach(item => {
+    const d = new Date(item.createdAt);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    if (!map[key]) map[key] = { month: MONTHS_ID[d.getMonth()], total: 0, completed: 0, _y: d.getFullYear(), _m: d.getMonth() };
+    map[key].total += 1;
+    if (item.status === "COMPLETED") map[key].completed += 1;
+  });
+  return Object.values(map)
+    .sort((a, b) => a._y !== b._y ? a._y - b._y : a._m - b._m)
+    .slice(-8);
+}
+
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl shadow-lg px-4 py-3 text-xs min-w-[130px]">
+      <p className="font-bold text-gray-700 mb-2">{label}</p>
+      {payload.map((p, i) => (
+        <div key={i} className="flex items-center justify-between gap-4 mb-1 last:mb-0">
+          <span className="flex items-center gap-1.5 text-gray-500">
+            <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: p.color }} />
+            {p.name}
+          </span>
+          <span className="font-semibold text-gray-800">{p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ChartCard({ title, subtitle, legend, children, delay = 0 }) {
+  return (
+    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm" style={{ animation: `fadeInUp 0.5s ease-out ${delay}ms both` }}>
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+        <div>
+          <p className="font-black text-gray-800 text-sm">{title}</p>
+          {subtitle && <p className="text-gray-400 text-xs mt-0.5">{subtitle}</p>}
+        </div>
+        {legend && (
+          <div className="flex items-center gap-3 flex-wrap">
+            {legend.map((l, i) => (
+              <span key={i} className="flex items-center gap-1.5 text-xs text-gray-400">
+                <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: l.color }} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 // ─── Dashboard View ───────────────────────────────────────────────────────────
 function DashboardView() {
-  const [stats, setStats]   = useState({});
+  const [stats, setStats]     = useState({});
   const [loading, setLoading] = useState(true);
   const user = getUserInfo();
 
@@ -289,39 +393,60 @@ function DashboardView() {
     api.getDashboardStats().then(d => { setStats(d?.data ?? {}); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
-  const persentase = Array.isArray(stats?.persentaseStatus) ? stats.persentaseStatus : [];
-  const timeline   = Array.isArray(stats?.timelineSurat)    ? stats.timelineSurat    : [];
-  const getCount   = (key) => persentase.find(p => p.status === key)?._count?.id ?? 0;
-  const totalSurat = persentase.reduce((a, p) => a + (p._count?.id ?? 0), 0);
+  // persentaseStatus → array of { status, _count: { id } }
+  const persentaseStatus = Array.isArray(stats?.persentaseStatus) ? stats.persentaseStatus : [];
+
+  // timelineSurat → { masuk: [...], keluar: [...] }
+  const timelineMasuk  = Array.isArray(stats?.timelineSurat?.masuk)  ? stats.timelineSurat.masuk  : [];
+  const timelineKeluar = Array.isArray(stats?.timelineSurat?.keluar) ? stats.timelineSurat.keluar : [];
+
+  // statsAgenda → { masuk: number, keluar: number }
+  const statsAgenda = stats?.statsAgenda ?? {};
+
+  const getCount = (key) => persentaseStatus.find(p => p.status === key)?._count?.id ?? 0;
+  const totalSurat = persentaseStatus.reduce((a, p) => a + (p._count?.id ?? 0), 0);
+
+  // Chart 1: distribusi status
+  const statusChartData = persentaseStatus
+    .filter(p => (p._count?.id ?? 0) > 0)
+    .map(p => ({
+      name: STATUS_CHART_LABELS[p.status] || p.status,
+      Jumlah: p._count?.id ?? 0,
+      fill: STATUS_CHART_COLORS[p.status] || "#B4B2A9",
+    }));
+
+  // Chart 2: tren surat masuk
+  const masukChartData = buildMonthlyMap(timelineMasuk);
+
+  // Chart 3: tren surat keluar
+  const keluarChartData = buildMonthlyMap(timelineKeluar);
 
   const statCards = [
-    { label: "Total Surat Masuk",     value: totalSurat,                    sub: "Semua status",          icon: <Ic.Mail />,         accent: "#6D9E51" },
-    { label: "Menunggu Balasan Saya", value: getCount("AWAITING_REPLY_UMUM"), sub: "Perlu segera dibalas",  icon: <Ic.Reply />,        accent: "#0891b2" },
-    { label: "Selesai & Dibalas",     value: getCount("COMPLETED"),          sub: "Surat telah selesai",   icon: <Ic.ShieldCheck />,  accent: "#4a7a36" },
+    { label: "Total Surat Masuk",     value: totalSurat,                      sub: "Semua status",          icon: <Ic.Mail />,          accent: "#6D9E51" },
+    { label: "Menunggu Balasan Saya", value: getCount("AWAITING_REPLY_UMUM"), sub: "Perlu segera dibalas",  icon: <Ic.Reply />,         accent: "#0891b2" },
+    { label: "Selesai & Dibalas",     value: getCount("COMPLETED"),           sub: "Surat telah selesai",   icon: <Ic.ShieldCheck />,   accent: "#4a7a36" },
     { label: "Total Surat Diproses",  value: getCount("DISPATCHED_TO_STAFF") + getCount("AWAITING_REPLY_UMUM") + getCount("COMPLETED"), sub: "Sudah memasuki alur staff", icon: <Ic.SendHorizonal />, accent: "#6366f1" },
   ];
 
-  const monthNames = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-  const monthMap = {};
-  timeline.forEach(item => {
-    const d = new Date(item.createdAt);
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
-    if (!monthMap[key]) monthMap[key] = { month: monthNames[d.getMonth()], total: 0, completed: 0 };
-    monthMap[key].total += 1;
-    if (item.status === "COMPLETED") monthMap[key].completed += 1;
-  });
-  const chartData = Object.values(monthMap).slice(-8);
+  const skeletonChart   = <div className="h-52 bg-gray-50 rounded-xl animate-pulse" />;
+  const skeletonChartSm = <div className="h-48 bg-gray-50 rounded-xl animate-pulse" />;
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div style={{ animation: "fadeInUp 0.4s ease-out both" }}>
         <h2 className="text-2xl font-black text-gray-900">Dashboard</h2>
         <p className="text-gray-400 text-sm mt-0.5">Selamat datang, <span className="font-semibold text-gray-600">{user.jabatan}</span> 👋</p>
       </div>
 
+      {/* Stat cards */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 h-28 animate-pulse"><div className="h-3 bg-gray-100 rounded w-2/3 mb-3" /><div className="h-7 bg-gray-100 rounded w-1/3" /></div>)}
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 h-28 animate-pulse">
+              <div className="h-3 bg-gray-100 rounded w-2/3 mb-3" /><div className="h-7 bg-gray-100 rounded w-1/3" />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -329,35 +454,153 @@ function DashboardView() {
         </div>
       )}
 
+      {/* ── Row 1: Chart 1 (distribusi status) + Kalender ── */}
       <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-gray-100 shadow-sm" style={{ animation: "fadeInUp 0.5s ease-out 300ms both" }}>
-          <div className="flex items-center justify-between mb-5">
-            <h4 className="font-black text-gray-800">Statistik Surat</h4>
-            <div className="flex items-center gap-4 text-xs text-gray-400">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#6D9E51] inline-block" />Masuk</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[#BCD9A2] inline-block" />Selesai</span>
-            </div>
-          </div>
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={chartData} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", fontSize: 12 }} cursor={{ fill: "rgba(109,158,81,0.05)" }} />
-                <Bar dataKey="total" fill="#6D9E51" radius={[6,6,0,0]} name="Surat Masuk" />
-                <Bar dataKey="completed" fill="#BCD9A2" radius={[6,6,0,0]} name="Selesai" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-56 flex items-center justify-center">
-              <div className="text-center"><div className="text-4xl mb-2">📊</div><p className="text-gray-400 text-sm">Data statistik belum tersedia</p></div>
-            </div>
-          )}
+        <div className="lg:col-span-2">
+          <ChartCard
+            title="Distribusi Status Surat"
+            subtitle="Jumlah surat per status saat ini"
+            delay={200}
+          >
+            {loading ? skeletonChart : statusChartData.length === 0 ? (
+              <div className="h-52 flex flex-col items-center justify-center gap-2 text-gray-400">
+                <span className="text-3xl">📊</span>
+                <p className="text-xs font-medium">Data belum tersedia</p>
+              </div>
+            ) : (
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={statusChartData} barSize={26} margin={{ top: 4, right: 8, left: -16, bottom: 24 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10, fill: "#9ca3af" }}
+                      axisLine={false} tickLine={false}
+                      interval={0} angle={-30} textAnchor="end" height={56}
+                    />
+                    <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(109,158,81,0.05)", radius: 6 }} />
+                    <Bar dataKey="Jumlah" radius={[6, 6, 0, 0]}>
+                      {statusChartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </ChartCard>
         </div>
         <MiniCalendar />
       </div>
 
+      {/* ── Row 2: Chart 2 (tren masuk) + Chart 3 (tren keluar) ── */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Chart 2: area line — surat masuk */}
+        <ChartCard
+          title="Tren Surat Masuk"
+          subtitle="Volume surat masuk & penyelesaian (8 bulan terakhir)"
+          legend={[
+            { color: "#378ADD", label: "Surat masuk" },
+            { color: "#1D9E75", label: "Selesai" },
+          ]}
+          delay={300}
+        >
+          {loading ? skeletonChartSm : masukChartData.length === 0 ? (
+            <div className="h-48 flex flex-col items-center justify-center gap-2 text-gray-400">
+              <span className="text-3xl">📨</span>
+              <p className="text-xs font-medium">Belum ada data surat masuk</p>
+            </div>
+          ) : (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={masukChartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="vuGMasuk" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#378ADD" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#378ADD" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="vuGSelesai" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#1D9E75" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#1D9E75" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="total" name="Surat Masuk"
+                    stroke="#378ADD" strokeWidth={2} fill="url(#vuGMasuk)"
+                    dot={{ r: 4, fill: "#378ADD", strokeWidth: 0 }}
+                    activeDot={{ r: 6, fill: "#378ADD", strokeWidth: 2, stroke: "#fff" }} />
+                  <Area type="monotone" dataKey="completed" name="Selesai"
+                    stroke="#1D9E75" strokeWidth={2} fill="url(#vuGSelesai)"
+                    dot={{ r: 4, fill: "#1D9E75", strokeWidth: 0 }}
+                    activeDot={{ r: 6, fill: "#1D9E75", strokeWidth: 2, stroke: "#fff" }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ChartCard>
+
+        {/* Chart 3: area line — surat keluar */}
+        <ChartCard
+          title="Tren Surat Keluar"
+          subtitle="Volume balasan & surat keluar (8 bulan terakhir)"
+          legend={[{ color: "#BA7517", label: "Surat keluar" }]}
+          delay={380}
+        >
+          {loading ? skeletonChartSm : keluarChartData.length === 0 ? (
+            <div className="h-48 flex flex-col items-center justify-center gap-2 text-gray-400">
+              <span className="text-3xl">📤</span>
+              <p className="text-xs font-medium">Belum ada data surat keluar</p>
+            </div>
+          ) : (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={keluarChartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="vuGKeluar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#BA7517" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#BA7517" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="total" name="Surat Keluar"
+                    stroke="#BA7517" strokeWidth={2} fill="url(#vuGKeluar)"
+                    dot={{ r: 4, fill: "#BA7517", strokeWidth: 0 }}
+                    activeDot={{ r: 6, fill: "#BA7517", strokeWidth: 2, stroke: "#fff" }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ChartCard>
+      </div>
+
+      {/* ── Agenda summary bar ── */}
+      {!loading && (statsAgenda.masuk !== undefined || statsAgenda.keluar !== undefined) && (
+        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-6 flex-wrap"
+          style={{ animation: "fadeInUp 0.5s ease-out 450ms both" }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600"><Ic.Book /></div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Total Agenda Masuk</p>
+              <p className="text-xl font-black text-gray-900"><AnimNum val={statsAgenda.masuk ?? 0} /></p>
+            </div>
+          </div>
+          <div className="w-px h-10 bg-gray-100 flex-shrink-0" />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600"><Ic.Send /></div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium">Total Agenda Keluar</p>
+              <p className="text-xl font-black text-gray-900"><AnimNum val={statsAgenda.keluar ?? 0} /></p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Status legend ── */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm" style={{ animation: "fadeInUp 0.5s ease-out 500ms both" }}>
         <h4 className="font-black text-gray-800 mb-4">Legenda Status Surat</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
@@ -373,7 +616,7 @@ function DashboardView() {
   );
 }
 
-// ─── Inline PDF Viewer (blob-fetch) ───────────────────────────────────────────
+// ─── Inline PDF Viewer ─────────────────────────────────────────────────────────
 function PDFViewer({ url, fileName }) {
   const [viewState, setViewState] = useState("loading");
   const [blobUrl, setBlobUrl]     = useState(null);
@@ -419,8 +662,8 @@ function PDFViewer({ url, fileName }) {
             <p className="text-xs text-gray-400 font-medium">Memuat dokumen...</p>
           </div>
         )}
-        {viewState === "blob"   && blobUrl   && <iframe src={blobUrl}    className="w-full h-full border-0" style={{ minHeight: "500px" }} title={fileName || "PDF"} />}
-        {viewState === "google" && googleUrl && <iframe src={googleUrl}  className="w-full h-full border-0" style={{ minHeight: "500px" }} title={fileName || "PDF"} sandbox="allow-scripts allow-same-origin allow-popups" />}
+        {viewState === "blob"   && blobUrl   && <iframe src={blobUrl}   className="w-full h-full border-0" style={{ minHeight: "500px" }} title={fileName || "PDF"} />}
+        {viewState === "google" && googleUrl && <iframe src={googleUrl} className="w-full h-full border-0" style={{ minHeight: "500px" }} title={fileName || "PDF"} sandbox="allow-scripts allow-same-origin allow-popups" />}
         {viewState === "error"  && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gray-50 p-6 text-center">
             <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-400"><Ic.FileText /></div>
@@ -498,17 +741,44 @@ function MobilePDFSection({ url, fileName }) {
   );
 }
 
+// ─── Instruksi Kamad Banner ───────────────────────────────────────────────────
+function InstruksiKamadBanner({ catatan, status }) {
+  const isDisposisi = status === "DISPATCHED_TO_STAFF" || status === "AWAITING_REPLY_UMUM";
+  const config = isDisposisi
+    ? { bg: "bg-orange-50", border: "border-orange-200", icon: "🏛️", title: "Instruksi Kepala Madrasah — Disposisi", color: "text-orange-800", titleColor: "text-orange-700", badgeBg: "bg-orange-100", badgeBorder: "border-orange-300", badgeText: "text-orange-700", badgeLabel: "Disposisi ke Staff" }
+    : { bg: "bg-purple-50", border: "border-purple-200", icon: "📋", title: "Catatan Kepala Madrasah", color: "text-purple-800", titleColor: "text-purple-700", badgeBg: "bg-purple-100", badgeBorder: "border-purple-300", badgeText: "text-purple-700", badgeLabel: "Catatan" };
+
+  return (
+    <div className={`rounded-xl border px-3.5 py-3 ${config.bg} ${config.border}`}
+      style={{ animation: "fadeInUp 0.4s ease-out both" }}>
+      <div className="flex items-start gap-2.5">
+        <span className="text-base flex-shrink-0 mt-0.5">{config.icon}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <p className={`text-[10px] font-black uppercase tracking-wider ${config.titleColor}`}>{config.title}</p>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${config.badgeBg} ${config.badgeBorder} ${config.badgeText}`}>
+              {config.badgeLabel}
+            </span>
+          </div>
+          <p className={`text-xs leading-relaxed font-medium ${config.color}`}>{catatan}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Surat Action Panel (Validator Umum) ──────────────────────────────────────
 function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
-  const [detail, setDetail]         = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [showReply, setShowReply]   = useState(false);
-  const [replyPesan, setReplyPesan] = useState("");
-  const [replyFile, setReplyFile]   = useState(null);
+  const [detail, setDetail]               = useState(null);
+  const [loading, setLoading]             = useState(true);
+  const [showReply, setShowReply]         = useState(false);
+  const [replyPesan, setReplyPesan]       = useState("");
+  const [replyFile, setReplyFile]         = useState(null);
+  const [replyNomorSuratKeluar, setReplyNomorSuratKeluar] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const fileRef = useRef();
 
-  useEffect(() => {
+  const loadDetail = useCallback(() => {
     setLoading(true);
     api.getSuratDetail(suratId).then(d => {
       setDetail(d?.data ?? d);
@@ -516,8 +786,15 @@ function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
     }).catch(() => setLoading(false));
   }, [suratId]);
 
-  // Validator Umum can reply when status is AWAITING_REPLY_UMUM
-  const isReplyable = detail?.status === "AWAITING_REPLY_UMUM";
+  useEffect(() => { loadDetail(); }, [loadDetail]);
+
+  const isReplyable  = detail?.status === "AWAITING_REPLY_UMUM";
+  const isArchivable = ["COMPLETED", "REJECTED"].includes(detail?.status);
+
+  const catatanApprover = detail?.catatanApprover;
+  const catatanKATU     = detail?.catatanKATU;
+  const showKamadNote   = !!catatanApprover;
+  const showKATUNote    = !!catatanKATU && !showKamadNote;
 
   const handleReply = async () => {
     if (!replyFile) { toast.add("File balasan PDF wajib diunggah", "error"); return; }
@@ -526,6 +803,7 @@ function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
       const fd = new FormData();
       fd.append("file", replyFile);
       fd.append("pesan", replyPesan);
+      if (replyNomorSuratKeluar.trim()) fd.append("nomorSuratKeluar", replyNomorSuratKeluar);
       const res = await api.replySurat(suratId, fd);
       if (res.success === false) throw new Error(res.message || "Gagal mengirim balasan");
       toast.add("Balasan berhasil dikirim ke email pengirim!");
@@ -556,14 +834,12 @@ function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
           </div>
         </div>
 
-        {/* Split body */}
         {loading ? (
           <div className="flex-1 p-8 space-y-4">{[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-gray-50 rounded-xl animate-pulse" />)}</div>
         ) : !detail ? (
           <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Gagal memuat detail surat</div>
         ) : (
           <div className="flex-1 flex overflow-hidden min-h-0">
-
             {/* LEFT: info + actions */}
             <div className="w-full lg:w-80 xl:w-96 flex-shrink-0 flex flex-col border-r border-gray-100 overflow-y-auto">
               <div className="p-4 space-y-2.5 flex-1">
@@ -581,14 +857,20 @@ function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
                     <p className={`text-sm font-semibold text-gray-800 break-all leading-snug ${mono ? "font-mono text-[#4a7a36]" : ""}`}>{val || "—"}</p>
                   </div>
                 ))}
-                {detail.catatanKATU && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-3.5 py-2.5">
+
+                {showKamadNote && <InstruksiKamadBanner catatan={catatanApprover} status={detail.status} />}
+
+                {showKATUNote && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-3.5 py-2.5"
+                    style={{ animation: "fadeInUp 0.3s ease-out both" }}>
                     <p className="text-[10px] text-blue-600 uppercase tracking-wider font-bold mb-0.5">Catatan KATU</p>
-                    <p className="text-xs text-blue-800 leading-relaxed">{detail.catatanKATU}</p>
+                    <p className="text-xs text-blue-800 leading-relaxed">{catatanKATU}</p>
                   </div>
                 )}
-                {detail.instruksi && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-xl px-3.5 py-2.5">
+
+                {detail.instruksi && !showKamadNote && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl px-3.5 py-2.5"
+                    style={{ animation: "fadeInUp 0.35s ease-out both" }}>
                     <p className="text-[10px] text-orange-600 uppercase tracking-wider font-bold mb-0.5">Instruksi Disposisi</p>
                     <p className="text-xs text-orange-800 leading-relaxed">{detail.instruksi}</p>
                   </div>
@@ -598,12 +880,25 @@ function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
               {/* Actions */}
               <div className="border-t border-gray-100 p-4 space-y-2 bg-gray-50/40 flex-shrink-0">
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-3">Tindakan</p>
-                {isReplyable ? (
+
+                {isReplyable && (
                   <button onClick={() => setShowReply(true)}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#6D9E51] to-[#4a7a36] text-white font-bold text-sm hover:shadow-lg transition-all hover:-translate-y-0.5">
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#6D9E51] to-[#4a7a36] text-white font-bold text-sm hover:shadow-lg transition-all hover:-translate-y-0.5"
+                    style={{ animation: "fadeInUp 0.3s ease-out both" }}>
                     <Ic.Reply /> Kirim Balasan Final
                   </button>
-                ) : (
+                )}
+
+                {isArchivable && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5"
+                    style={{ animation: "fadeInUp 0.35s ease-out both" }}>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Untuk mengarsipkan surat ini, buka menu <span className="font-bold text-gray-700">Arsip Surat</span> di sidebar.
+                    </p>
+                  </div>
+                )}
+
+                {!isReplyable && !isArchivable && (
                   <div className="bg-gray-100 rounded-xl px-3.5 py-2.5">
                     <p className="text-xs text-gray-400 leading-relaxed">Tidak ada tindakan yang tersedia untuk status ini.</p>
                   </div>
@@ -624,7 +919,6 @@ function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
           </div>
         )}
 
-        {/* Mobile PDF viewer */}
         {!loading && detail?.fileUrl && (
           <MobilePDFSection url={detail.fileUrl} fileName={detail.fileName || detail.trackingId} />
         )}
@@ -640,7 +934,21 @@ function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
             </p>
           </div>
 
-          {/* Pesan balasan */}
+          {detail?.catatanApprover && (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl px-3.5 py-2.5"
+              style={{ animation: "fadeInUp 0.3s ease-out both" }}>
+              <p className="text-[10px] text-orange-600 uppercase tracking-wider font-bold mb-1">Instruksi Kamad (Referensi)</p>
+              <p className="text-xs text-orange-800 leading-relaxed italic">"{detail.catatanApprover}"</p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nomor Surat Keluar</label>
+            <input value={replyNomorSuratKeluar} onChange={e => setReplyNomorSuratKeluar(e.target.value)}
+              placeholder="Contoh: B-10/MTsN/III/2026"
+              className="w-full border-2 border-gray-200 rounded-xl py-3 px-4 text-sm outline-none focus:border-[#6D9E51] transition-colors" />
+          </div>
+
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">Pesan Balasan</label>
             <textarea value={replyPesan} onChange={e => setReplyPesan(e.target.value)}
@@ -648,7 +956,6 @@ function SuratActionPanel({ suratId, onClose, onActionDone, toast }) {
               className="w-full border-2 border-gray-200 rounded-xl py-3 px-4 text-sm outline-none focus:border-[#6D9E51] transition-colors resize-none" />
           </div>
 
-          {/* Upload file balasan */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">File Balasan (PDF) <span className="text-red-400">*</span></label>
             <div onClick={() => fileRef.current?.click()}
@@ -723,7 +1030,8 @@ function SuratView({ toast }) {
           <p className="text-gray-400 text-sm mt-0.5">Kirim balasan final ke pengirim surat</p>
         </div>
         {replyCount > 0 && (
-          <div className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-2">
+          <div className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-2"
+            style={{ animation: "fadeInUp 0.4s ease-out 100ms both" }}>
             <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
             <span className="text-sm font-bold text-cyan-700">{replyCount} surat menunggu balasan</span>
           </div>
@@ -751,7 +1059,6 @@ function SuratView({ toast }) {
           <div className="text-center py-16"><div className="text-4xl mb-3">📭</div><p className="text-gray-400 text-sm font-medium">Tidak ada surat ditemukan</p></div>
         ) : (
           <>
-            {/* Desktop table */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="bg-gray-50/50">
@@ -788,7 +1095,6 @@ function SuratView({ toast }) {
               </table>
             </div>
 
-            {/* Mobile cards */}
             <div className="md:hidden divide-y divide-gray-50">
               {filtered.map((s, i) => (
                 <button key={s._id || s.id || i}
@@ -826,10 +1132,669 @@ function SuratView({ toast }) {
   );
 }
 
+// ─── Agenda View (Validator Umum) ─────────────────────────────────────────────
+function AgendaView({ toast }) {
+  const [agendaMasuk,  setAgendaMasuk]  = useState([]);
+  const [agendaKeluar, setAgendaKeluar] = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState("");
+  const [activeTab, setActiveTab]       = useState("masuk");
+  const [editMasukItem, setEditMasukItem]   = useState(null);
+  const [editKeluarItem, setEditKeluarItem] = useState(null);
+  const [nomorInput, setNomorInput]     = useState("");
+  const [keluarNomor,   setKeluarNomor]   = useState("");
+  const [keluarPerihal, setKeluarPerihal] = useState("");
+  const [keluarTujuan,  setKeluarTujuan]  = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      api.getAgendaMasuk().catch(() => ({ data: [] })),
+      api.getAgendaKeluar().catch(() => ({ data: [] })),
+    ]).then(([resMasuk, resKeluar]) => {
+      setAgendaMasuk(Array.isArray(resMasuk?.data ?? resMasuk) ? (resMasuk?.data ?? resMasuk) : []);
+      setAgendaKeluar(Array.isArray(resKeluar?.data ?? resKeluar) ? (resKeluar?.data ?? resKeluar) : []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const currentList = activeTab === "masuk" ? agendaMasuk : agendaKeluar;
+  const filtered = currentList.filter(a =>
+    !search || [a.nomorAgenda, a.nomorSurat, a.trackingId, a.instansi, a.namaPengirim, a.perihal, a.tujuan]
+      .some(v => v?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const handleEditMasuk = async () => {
+    if (!nomorInput.trim()) { toast.add("Nomor agenda wajib diisi", "error"); return; }
+    setActionLoading(true);
+    try {
+      const res = await api.updateAgendaMasuk(editMasukItem.id, { nomorAgenda: nomorInput });
+      if (res.success === false) throw new Error(res.message || "Gagal memperbarui agenda");
+      toast.add("Nomor agenda berhasil diperbarui!");
+      setEditMasukItem(null); setNomorInput(""); load();
+    } catch (e) { toast.add(e.message, "error"); }
+    setActionLoading(false);
+  };
+
+  const handleEditKeluar = async () => {
+    if (!keluarNomor.trim()) { toast.add("Nomor surat keluar wajib diisi", "error"); return; }
+    setActionLoading(true);
+    try {
+      const res = await api.updateAgendaKeluar(editKeluarItem.id, {
+        nomorSurat: keluarNomor, perihal: keluarPerihal, tujuan: keluarTujuan,
+      });
+      if (res.success === false) throw new Error(res.message || "Gagal memperbarui agenda keluar");
+      toast.add("Agenda keluar berhasil diperbarui!");
+      setEditKeluarItem(null); load();
+    } catch (e) { toast.add(e.message, "error"); }
+    setActionLoading(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div style={{ animation: "fadeInUp 0.4s ease-out both" }}>
+        <h2 className="text-2xl font-black text-gray-900">Buku Agenda</h2>
+        <p className="text-gray-400 text-sm mt-0.5">Pencatatan dan pengelolaan nomor agenda surat</p>
+      </div>
+
+      <div className="flex items-center gap-1 bg-gray-100/60 p-1 rounded-2xl w-fit"
+        style={{ animation: "fadeInUp 0.4s ease-out 60ms both" }}>
+        {[
+          { id: "masuk",  label: "Agenda Masuk",  count: agendaMasuk.length },
+          { id: "keluar", label: "Agenda Keluar", count: agendaKeluar.length },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSearch(""); }}
+            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${activeTab === tab.id ? "bg-white text-[#4a7a36] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            {tab.label}
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${activeTab === tab.id ? "bg-[#FEFFD3] text-[#4a7a36] border border-[#BCD9A2]" : "bg-gray-200 text-gray-500"}`}>
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style={{ animation: "fadeInUp 0.5s ease-out 100ms both" }}>
+        <div className="p-4 sm:p-5 border-b border-gray-50 flex items-center gap-3">
+          <div className="relative flex-1 min-w-0">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"><Ic.Search /></div>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder={activeTab === "masuk" ? "Cari nomor agenda, tracking ID, pengirim..." : "Cari nomor surat, perihal, tujuan..."}
+              className="w-full border-2 border-gray-100 rounded-xl py-2.5 pl-9 pr-4 text-sm outline-none focus:border-[#6D9E51] transition-colors" />
+          </div>
+          <button onClick={load} className="p-2.5 border-2 border-gray-100 rounded-xl hover:border-[#6D9E51] text-gray-400 hover:text-[#6D9E51] transition-all flex-shrink-0"><Ic.Refresh /></button>
+        </div>
+
+        {loading ? (
+          <div className="p-8 space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-gray-50 rounded-xl animate-pulse" />)}</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-4xl mb-3">{activeTab === "masuk" ? "📋" : "📤"}</div>
+            <p className="text-gray-400 text-sm font-medium">Belum ada agenda {activeTab}</p>
+          </div>
+        ) : activeTab === "masuk" ? (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="bg-gray-50/50">
+                  {["Nomor Agenda","Tracking ID","Nomor Surat","Pengirim / Instansi","Tgl Agenda","Status KATU","Aksi"].map((h, i) => (
+                    <th key={i} className={`text-xs font-semibold text-gray-400 px-5 py-3 ${i === 6 ? "text-right" : "text-left"}`}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filtered.map((a, i) => (
+                    <tr key={a.id || i} className="hover:bg-[#FEFFD3]/30 transition-colors group"
+                      style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-xs font-bold text-[#4a7a36] bg-[#FEFFD3] px-2 py-1 rounded-lg">{a.nomorAgenda || "—"}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-gray-500 font-mono">{a.trackingId || "—"}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600">{a.nomorSurat || "—"}</td>
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-semibold text-gray-800">{a.namaPengirim || "—"}</p>
+                        <p className="text-xs text-gray-400">{a.instansi || ""}</p>
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-gray-400">
+                        {a.tglAgenda ? new Date(a.tglAgenda).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {a.isAgendaDisetujuiKATU ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#FEFFD3] border border-[#BCD9A2] text-[#4a7a36]">
+                            <Ic.Check /> Disetujui KATU
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-50 border border-yellow-200 text-yellow-700">
+                            <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse" /> Menunggu
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => { setEditMasukItem(a); setNomorInput(a.nomorAgenda || ""); }}
+                            className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-all">
+                            <Ic.Edit />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="md:hidden divide-y divide-gray-50">
+              {filtered.map((a, i) => (
+                <div key={a.id || i} className="p-4 space-y-2.5"
+                  style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs font-bold text-[#4a7a36] bg-[#FEFFD3] px-2 py-0.5 rounded-lg">{a.nomorAgenda || "—"}</span>
+                      <p className="text-sm font-bold text-gray-800 mt-1">{a.namaPengirim || "—"}</p>
+                      <p className="text-xs text-gray-400">{a.instansi} · {a.trackingId}</p>
+                    </div>
+                    <button onClick={() => { setEditMasukItem(a); setNomorInput(a.nomorAgenda || ""); }}
+                      className="p-2 rounded-lg bg-blue-50 text-blue-500 flex-shrink-0"><Ic.Edit /></button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    {a.isAgendaDisetujuiKATU ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#FEFFD3] border border-[#BCD9A2] text-[#4a7a36]">
+                        <Ic.Check /> Disetujui KATU
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-50 border border-yellow-200 text-yellow-700">
+                        Menunggu Persetujuan
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-400">
+                      {a.tglAgenda ? new Date(a.tglAgenda).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "—"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="bg-gray-50/50">
+                  {["Nomor Surat","Perihal","Tujuan","Tanggal","Aksi"].map((h, i) => (
+                    <th key={i} className={`text-xs font-semibold text-gray-400 px-5 py-3 ${i === 4 ? "text-right" : "text-left"}`}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filtered.map((a, i) => (
+                    <tr key={a.id || i} className="hover:bg-[#FEFFD3]/30 transition-colors group"
+                      style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-xs font-bold text-[#4a7a36] bg-[#FEFFD3] px-2 py-1 rounded-lg">{a.nomorSurat || "—"}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-gray-700 max-w-[200px] truncate">{a.perihal || "—"}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-500">{a.tujuan || "—"}</td>
+                      <td className="px-5 py-3.5 text-xs text-gray-400">
+                        {a.createdAt ? new Date(a.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => { setEditKeluarItem(a); setKeluarNomor(a.nomorSurat || ""); setKeluarPerihal(a.perihal || ""); setKeluarTujuan(a.tujuan || ""); }}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-all opacity-0 group-hover:opacity-100">
+                          <Ic.Edit />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="md:hidden divide-y divide-gray-50">
+              {filtered.map((a, i) => (
+                <div key={a.id || i} className="p-4 space-y-1.5"
+                  style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs font-bold text-[#4a7a36] bg-[#FEFFD3] px-2 py-0.5 rounded-lg">{a.nomorSurat || "—"}</span>
+                      <p className="text-sm font-semibold text-gray-800 mt-1">{a.perihal || "—"}</p>
+                      <p className="text-xs text-gray-400">Kepada: {a.tujuan || "—"}</p>
+                    </div>
+                    <button onClick={() => { setEditKeluarItem(a); setKeluarNomor(a.nomorSurat || ""); setKeluarPerihal(a.perihal || ""); setKeluarTujuan(a.tujuan || ""); }}
+                      className="p-2 rounded-lg bg-blue-50 text-blue-500 flex-shrink-0"><Ic.Edit /></button>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    {a.createdAt ? new Date(a.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <Modal open={!!editMasukItem} onClose={() => setEditMasukItem(null)} title="Edit Nomor Agenda Masuk" maxW="max-w-sm">
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-700">
+            Nomor agenda bisa diperbarui kapan saja tanpa terkunci status KATU.
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nomor Agenda Baru <span className="text-red-400">*</span></label>
+            <input value={nomorInput} onChange={e => setNomorInput(e.target.value)}
+              placeholder="Contoh: AGD-045/MTsN/2026"
+              className="w-full border-2 border-gray-200 rounded-xl py-3 px-4 text-sm outline-none focus:border-[#6D9E51] transition-colors" />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => setEditMasukItem(null)} className="flex-1 border-2 border-gray-200 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-all">Batal</button>
+            <button onClick={handleEditMasuk} disabled={actionLoading}
+              className="flex-1 bg-gradient-to-r from-[#6D9E51] to-[#4a7a36] text-white font-bold py-3 rounded-xl disabled:opacity-70 flex items-center justify-center gap-2">
+              {actionLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Ic.Check />}
+              Simpan
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!editKeluarItem} onClose={() => setEditKeluarItem(null)} title="Edit Agenda Keluar" maxW="max-w-md">
+        <div className="space-y-4">
+          <div className="bg-[#6D9E51]/10 border border-[#BCD9A2] rounded-xl p-3.5 text-xs text-[#4a7a36]">
+            Data agenda keluar bisa diperbarui kapan saja.
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nomor Surat Keluar <span className="text-red-400">*</span></label>
+            <input value={keluarNomor} onChange={e => setKeluarNomor(e.target.value)}
+              placeholder="Contoh: B-10/MTsN/III/2026"
+              className="w-full border-2 border-gray-200 rounded-xl py-3 px-4 text-sm outline-none focus:border-[#6D9E51] transition-colors" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Perihal</label>
+            <input value={keluarPerihal} onChange={e => setKeluarPerihal(e.target.value)}
+              placeholder="Perihal surat keluar"
+              className="w-full border-2 border-gray-200 rounded-xl py-3 px-4 text-sm outline-none focus:border-[#6D9E51] transition-colors" />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Tujuan</label>
+            <input value={keluarTujuan} onChange={e => setKeluarTujuan(e.target.value)}
+              placeholder="Nama instansi tujuan"
+              className="w-full border-2 border-gray-200 rounded-xl py-3 px-4 text-sm outline-none focus:border-[#6D9E51] transition-colors" />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => setEditKeluarItem(null)} className="flex-1 border-2 border-gray-200 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-all">Batal</button>
+            <button onClick={handleEditKeluar} disabled={actionLoading}
+              className="flex-1 bg-gradient-to-r from-[#6D9E51] to-[#4a7a36] text-white font-bold py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-70 flex items-center justify-center gap-2">
+              {actionLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Ic.Check />}
+              Simpan
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Arsip View (Validator Umum) ──────────────────────────────────────────────
+function ArsipView({ toast }) {
+  const [arsipMasuk,  setArsipMasuk]  = useState([]);
+  const [arsipKeluar, setArsipKeluar] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState("");
+  const [activeTab, setActiveTab]     = useState("masuk");
+  const [suratHistory, setSuratHistory]   = useState([]);
+  const [histLoading, setHistLoading]     = useState(true);
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [showConfirm, setShowConfirm]     = useState(false);
+  const [archiveTipe, setArchiveTipe]     = useState("masuk");
+  const [showPindah,    setShowPindah]    = useState(false);
+  const [pindahTarget,  setPindahTarget]  = useState(null);
+  const [pindahTipe,    setPindahTipe]    = useState("masuk");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const loadAll = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      api.getArsipMasuk().catch(() => ({ data: [] })),
+      api.getArsipKeluar().catch(() => ({ data: [] })),
+    ]).then(([resMasuk, resKeluar]) => {
+      setArsipMasuk(Array.isArray(resMasuk?.data ?? resMasuk) ? (resMasuk?.data ?? resMasuk) : []);
+      setArsipKeluar(Array.isArray(resKeluar?.data ?? resKeluar) ? (resKeluar?.data ?? resKeluar) : []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const loadHistory = useCallback(() => {
+    setHistLoading(true);
+    api.getSuratHistory().then(d => {
+      const s = d?.data ?? d ?? [];
+      setSuratHistory(Array.isArray(s) ? s : []);
+      setHistLoading(false);
+    }).catch(() => setHistLoading(false));
+  }, []);
+
+  useEffect(() => { loadAll(); loadHistory(); }, [loadAll, loadHistory]);
+
+  const handleArchive = async () => {
+    setActionLoading(true);
+    try {
+      const res = await api.archiveSurat(archiveTarget.id, archiveTipe);
+      if (res.success === false) throw new Error(res.message || "Gagal mengarsipkan surat");
+      toast.add(`Surat berhasil diarsipkan sebagai arsip ${archiveTipe}!`);
+      setShowConfirm(false); setArchiveTarget(null);
+      loadAll(); loadHistory();
+    } catch (e) { toast.add(e.message, "error"); }
+    setActionLoading(false);
+  };
+
+  const handlePindah = async () => {
+    setActionLoading(true);
+    try {
+      const res = await api.archiveSurat(pindahTarget.id, pindahTipe);
+      if (res.success === false) throw new Error(res.message || "Gagal memindahkan arsip");
+      toast.add(`Surat berhasil dipindahkan ke Arsip ${pindahTipe === "masuk" ? "Masuk" : "Keluar"}!`);
+      setShowPindah(false); setPindahTarget(null);
+      loadAll(); loadHistory();
+    } catch (e) { toast.add(e.message, "error"); }
+    setActionLoading(false);
+  };
+
+  const kandidatArsip    = suratHistory.filter(s => ["COMPLETED", "REJECTED"].includes(s.status));
+  const filteredMasuk    = arsipMasuk.filter(a   => !search || [a.trackingId, a.namaPengirim, a.instansi, a.nomorSurat].some(v => v?.toLowerCase().includes(search.toLowerCase())));
+  const filteredKeluar   = arsipKeluar.filter(a  => !search || [a.trackingId, a.namaPengirim, a.instansi, a.nomorSurat].some(v => v?.toLowerCase().includes(search.toLowerCase())));
+  const filteredKandidat = kandidatArsip.filter(s => !search || [s.trackingId, s.namaPengirim, s.instansi].some(v => v?.toLowerCase().includes(search.toLowerCase())));
+  const currentFiltered  = activeTab === "masuk" ? filteredMasuk : activeTab === "keluar" ? filteredKeluar : filteredKandidat;
+
+  return (
+    <div className="space-y-6">
+      <div style={{ animation: "fadeInUp 0.4s ease-out both" }}>
+        <h2 className="text-2xl font-black text-gray-900">Arsip Surat</h2>
+        <p className="text-gray-400 text-sm mt-0.5">Penyimpanan permanen surat yang telah selesai diproses</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4" style={{ animation: "fadeInUp 0.4s ease-out 80ms both" }}>
+        {[
+          { label: "Arsip Masuk",     value: arsipMasuk.length,    accent: "#2563eb", icon: <Ic.Mail />,    sub: "Surat masuk terarsip" },
+          { label: "Arsip Keluar",    value: arsipKeluar.length,   accent: "#6b7280", icon: <Ic.Archive />, sub: "Surat keluar terarsip" },
+          { label: "Siap Diarsipkan", value: kandidatArsip.length, accent: "#6D9E51", icon: <Ic.Check />,   sub: "Selesai & Ditolak" },
+        ].map((c, i) => (
+          <div key={i} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5"
+            style={{ animation: `fadeInUp 0.4s ease-out ${80 + i * 80}ms both` }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${c.accent}18` }}>
+              <span style={{ color: c.accent }}>{c.icon}</span>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-medium">{c.label}</p>
+              <p className="text-xl font-black text-gray-900"><AnimNum val={c.value} /></p>
+              <p className="text-[10px] text-gray-400">{c.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-1 bg-gray-100/60 p-1 rounded-2xl w-fit"
+        style={{ animation: "fadeInUp 0.4s ease-out 120ms both" }}>
+        {[
+          { id: "masuk",    label: "Arsip Masuk",   count: arsipMasuk.length },
+          { id: "keluar",   label: "Arsip Keluar",  count: arsipKeluar.length },
+          { id: "kandidat", label: "Belum Diarsip", count: kandidatArsip.length },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSearch(""); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 ${activeTab === tab.id ? "bg-white text-[#4a7a36] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            {tab.label}
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${activeTab === tab.id ? "bg-[#FEFFD3] text-[#4a7a36] border border-[#BCD9A2]" : "bg-gray-200 text-gray-500"}`}>
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style={{ animation: "fadeInUp 0.5s ease-out 150ms both" }}>
+        <div className="p-4 sm:p-5 border-b border-gray-50 flex items-center gap-3">
+          <div className="relative flex-1 min-w-0">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300"><Ic.Search /></div>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Cari tracking ID, pengirim, instansi..."
+              className="w-full border-2 border-gray-100 rounded-xl py-2.5 pl-9 pr-4 text-sm outline-none focus:border-[#6D9E51] transition-colors" />
+          </div>
+          <button onClick={() => { loadAll(); loadHistory(); }}
+            className="p-2.5 border-2 border-gray-100 rounded-xl hover:border-[#6D9E51] text-gray-400 hover:text-[#6D9E51] transition-all flex-shrink-0 flex items-center justify-center">
+            <Ic.Refresh />
+          </button>
+        </div>
+
+        {(loading || histLoading) ? (
+          <div className="p-8 space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-gray-50 rounded-xl animate-pulse" />)}</div>
+        ) : currentFiltered.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-4xl mb-3">{activeTab === "kandidat" ? "✅" : "🗄️"}</div>
+            <p className="text-gray-400 text-sm font-medium">
+              {activeTab === "kandidat" ? "Semua surat sudah diarsipkan" : `Belum ada arsip ${activeTab}`}
+            </p>
+          </div>
+        ) : activeTab === "kandidat" ? (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="bg-gray-50/50">
+                  {["Tracking ID","Pengirim / Instansi","Status","Tanggal","Aksi"].map((h, i) => (
+                    <th key={i} className={`text-xs font-semibold text-gray-400 px-5 py-3 ${i === 4 ? "text-right" : "text-left"}`}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody className="divide-y divide-gray-50">
+                  {currentFiltered.map((s, i) => (
+                    <tr key={s._id || s.id || i} className="hover:bg-[#FEFFD3]/30 transition-colors group"
+                      style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-xs font-bold text-[#4a7a36] bg-[#FEFFD3] px-2 py-1 rounded-lg">{s.trackingId}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-semibold text-gray-800">{s.namaPengirim}</p>
+                        <p className="text-xs text-gray-400">{s.instansi}</p>
+                      </td>
+                      <td className="px-5 py-3.5"><StatusBadge status={s.status} /></td>
+                      <td className="px-5 py-3.5 text-xs text-gray-400">
+                        {s.createdAt ? new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => { setArchiveTarget({ id: s._id || s.id, trackingId: s.trackingId }); setShowConfirm(true); }}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border-2 border-gray-200 text-gray-600 hover:border-[#6D9E51] hover:text-[#4a7a36] hover:bg-[#FEFFD3]/40 transition-all opacity-0 group-hover:opacity-100">
+                          <Ic.Archive /> Arsipkan
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="md:hidden divide-y divide-gray-50">
+              {currentFiltered.map((s, i) => (
+                <div key={s._id || s.id || i} className="p-4 space-y-2"
+                  style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs font-bold text-[#4a7a36] bg-[#FEFFD3] px-2 py-0.5 rounded-lg">{s.trackingId}</span>
+                      <p className="font-bold text-gray-800 text-sm truncate mt-1">{s.namaPengirim}</p>
+                      <p className="text-xs text-gray-400 truncate">{s.instansi}</p>
+                    </div>
+                    <button
+                      onClick={() => { setArchiveTarget({ id: s._id || s.id, trackingId: s.trackingId }); setShowConfirm(true); }}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border-2 border-gray-200 text-gray-600 hover:border-[#6D9E51] transition-all flex-shrink-0">
+                      <Ic.Archive /> Arsipkan
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <StatusBadge status={s.status} />
+                    <span className="text-xs text-gray-400">{s.createdAt ? new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "—"}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="bg-gray-50/50">
+                  {["Tracking ID","Nomor Surat","Pengirim / Instansi","Status","Tanggal Arsip",""].map((h, i) => (
+                    <th key={i} className={`text-xs font-semibold text-gray-400 px-5 py-3 ${i === 5 ? "text-right" : "text-left"}`}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody className="divide-y divide-gray-50">
+                  {currentFiltered.map((a, i) => (
+                    <tr key={a.suratId || a._id || a.id || i} className="hover:bg-gray-50/60 transition-colors group"
+                      style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">{a.trackingId || "—"}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-gray-600 font-mono">{a.nomorSurat || "—"}</td>
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-semibold text-gray-800">{a.namaPengirim || "—"}</p>
+                        <p className="text-xs text-gray-400">{a.instansi || ""}</p>
+                      </td>
+                      <td className="px-5 py-3.5"><StatusBadge status={a.status || "ARCHIVED"} /></td>
+                      <td className="px-5 py-3.5 text-xs text-gray-400">
+                        {(a.archivedAt || a.updatedAt) ? new Date(a.archivedAt || a.updatedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button
+                          onClick={() => {
+                            const cur = activeTab;
+                            const suratId = a.suratId || a._id || a.id;
+                            setPindahTarget({ id: suratId, trackingId: a.trackingId, currentTipe: cur });
+                            setPindahTipe(cur === "masuk" ? "keluar" : "masuk");
+                            setShowPindah(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border-2 border-gray-200 text-gray-500 hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-all opacity-0 group-hover:opacity-100">
+                          <Ic.Edit /> Pindah Kategori
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="md:hidden divide-y divide-gray-50">
+              {currentFiltered.map((a, i) => (
+                <div key={a.suratId || a._id || a.id || i} className="p-4 space-y-1.5"
+                  style={{ animation: `fadeInUp 0.3s ease-out ${i * 30}ms both` }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-lg">{a.trackingId || "—"}</span>
+                      <p className="text-sm font-bold text-gray-800 mt-1">{a.namaPengirim || "—"}</p>
+                      <p className="text-xs text-gray-400">{a.instansi}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const cur = activeTab;
+                        const suratId = a.suratId || a._id || a.id;
+                        setPindahTarget({ id: suratId, trackingId: a.trackingId, currentTipe: cur });
+                        setPindahTipe(cur === "masuk" ? "keluar" : "masuk");
+                        setShowPindah(true);
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border-2 border-gray-200 text-gray-500 hover:border-amber-400 hover:text-amber-600 transition-all flex-shrink-0">
+                      <Ic.Edit /> Pindah
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <StatusBadge status={a.status || "ARCHIVED"} />
+                    <span className="text-xs text-gray-400">{(a.archivedAt || a.updatedAt) ? new Date(a.archivedAt || a.updatedAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "—"}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Modal Arsipkan */}
+      <Modal open={showConfirm} onClose={() => { setShowConfirm(false); setArchiveTarget(null); }} title="Arsipkan Surat" maxW="max-w-sm">
+        <div className="space-y-4">
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 flex items-start gap-2.5">
+            <span className="text-gray-500 flex-shrink-0 mt-0.5"><Ic.Archive /></span>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Surat <span className="font-bold text-gray-800">{archiveTarget?.trackingId}</span> akan dipindahkan ke arsip permanen.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Tipe Arsip <span className="text-red-400">*</span></label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { val: "masuk",  label: "Arsip Masuk",  desc: "Status → ARCHIVED" },
+                { val: "keluar", label: "Arsip Keluar", desc: "Status → ARCHIVED_OUTGOING" },
+              ].map(t => (
+                <button key={t.val} onClick={() => setArchiveTipe(t.val)}
+                  className={`py-2.5 px-3 rounded-xl border-2 text-left transition-all ${archiveTipe === t.val ? "border-[#6D9E51] bg-[#FEFFD3]" : "border-gray-200 hover:border-gray-300"}`}>
+                  <p className={`text-sm font-bold ${archiveTipe === t.val ? "text-[#4a7a36]" : "text-gray-600"}`}>{t.label}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{t.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => { setShowConfirm(false); setArchiveTarget(null); }}
+              className="flex-1 border-2 border-gray-200 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-all">Batal</button>
+            <button onClick={handleArchive} disabled={actionLoading}
+              className="flex-1 bg-gradient-to-r from-gray-600 to-gray-800 text-white font-bold py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-70 flex items-center justify-center gap-2">
+              {actionLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Ic.Archive />}
+              Arsipkan
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Pindah Kategori Arsip */}
+      <Modal open={showPindah} onClose={() => { setShowPindah(false); setPindahTarget(null); }} title="Pindah Kategori Arsip" maxW="max-w-sm">
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-2.5">
+            <span className="text-amber-500 flex-shrink-0 mt-0.5"><Ic.Info /></span>
+            <div className="min-w-0">
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Surat <span className="font-bold">{pindahTarget?.trackingId}</span> saat ini ada di{" "}
+                <span className="font-bold">Arsip {pindahTarget?.currentTipe === "masuk" ? "Masuk" : "Keluar"}</span>.
+                Pilih kategori tujuan di bawah.
+              </p>
+              <p className="text-[10px] text-amber-600 mt-1 font-mono break-all">ID: {pindahTarget?.id || "—"}</p>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Pindah ke <span className="text-red-400">*</span></label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { val: "masuk",  label: "Arsip Masuk",  desc: "Status → ARCHIVED" },
+                { val: "keluar", label: "Arsip Keluar", desc: "Status → ARCHIVED_OUTGOING" },
+              ].map(t => {
+                const isCurrent = t.val === pindahTarget?.currentTipe;
+                return (
+                  <button key={t.val} onClick={() => !isCurrent && setPindahTipe(t.val)} disabled={isCurrent}
+                    className={`py-2.5 px-3 rounded-xl border-2 text-left transition-all
+                      ${isCurrent ? "border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed" :
+                        pindahTipe === t.val ? "border-amber-400 bg-amber-50" : "border-gray-200 hover:border-gray-300"}`}>
+                    <p className={`text-sm font-bold ${pindahTipe === t.val && !isCurrent ? "text-amber-700" : "text-gray-600"}`}>
+                      {t.label} {isCurrent && <span className="text-[10px] font-normal">(saat ini)</span>}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{t.desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => { setShowPindah(false); setPindahTarget(null); }}
+              className="flex-1 border-2 border-gray-200 text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-all">Batal</button>
+            <button onClick={handlePindah} disabled={actionLoading || pindahTipe === pindahTarget?.currentTipe}
+              className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold py-3 rounded-xl hover:shadow-lg transition-all disabled:opacity-60 flex items-center justify-center gap-2">
+              {actionLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Ic.Edit />}
+              Pindahkan
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 const NAV = [
   { id: "dashboard", label: "Dashboard",     icon: <Ic.Dashboard /> },
   { id: "surat",     label: "Antrian Surat", icon: <Ic.Mail /> },
+  { id: "agenda",    label: "Buku Agenda",   icon: <Ic.Book /> },
+  { id: "arsip",     label: "Arsip Surat",   icon: <Ic.Archive /> },
 ];
 
 function Sidebar({ active, setActive, collapsed, setCollapsed, mobileOpen, setMobileOpen, onLogout }) {
@@ -904,7 +1869,7 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, mobileOpen, setMo
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
 function Topbar({ active, onMenuClick }) {
-  const titles = { dashboard: "Dashboard", surat: "Antrian Surat" };
+  const titles = { dashboard: "Dashboard", surat: "Antrian Surat", agenda: "Buku Agenda", arsip: "Arsip Surat" };
   const user = getUserInfo();
   return (
     <header className="fixed top-0 right-0 left-0 z-20 h-16 bg-white/90 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-4 sm:px-6">
@@ -972,6 +1937,8 @@ export default function ValidatorUmumDashboard() {
           <div className="p-4 sm:p-6 max-w-7xl mx-auto">
             {active === "dashboard" && <DashboardView />}
             {active === "surat"     && <SuratView toast={toast} />}
+            {active === "agenda"    && <AgendaView toast={toast} />}
+            {active === "arsip"     && <ArsipView toast={toast} />}
           </div>
         </main>
       </div>
