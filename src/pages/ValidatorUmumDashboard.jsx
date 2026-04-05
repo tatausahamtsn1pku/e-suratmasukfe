@@ -1805,7 +1805,7 @@ function Sidebar({ active, setActive, collapsed, setCollapsed, mobileOpen, setMo
           <img src="/logomts.png" alt="Logo" className="w-full h-full object-cover"
             onError={e => { e.target.style.display = "none"; e.target.parentElement.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" class="w-4 h-4"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>`; }} />
         </div>
-        {(isDrawer || !collapsed) && <span className="text-white font-black text-base tracking-tight">e-SuratMasuk</span>}
+        {(isDrawer || !collapsed) && <span className="text-white font-black text-base tracking-tight">SIDISMA</span>}
         {isDrawer && <button onClick={() => setMobileOpen(false)} className="ml-auto text-white/60 hover:text-white p-1"><Ic.X /></button>}
       </div>
       {(isDrawer || !collapsed) && (

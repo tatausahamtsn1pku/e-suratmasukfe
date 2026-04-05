@@ -231,7 +231,7 @@ export default function LoginPage() {
                     className="w-full h-full object-cover"
                     onError={e => { e.target.style.display = "none"; e.target.parentElement.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" class="w-5 h-5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>`; }} />
                 </div>
-                <span className="text-white font-black text-sm tracking-tight">e-SuratMasuk</span>
+                <span className="text-white font-black text-sm tracking-tight">SIDISMA</span>
               </div>
 
               {/* Illustration — user supplies /login-illustration.png */}
@@ -261,7 +261,7 @@ export default function LoginPage() {
               <div className="relative z-10 px-6 pb-6 pt-4">
                 <p className="text-white/40 text-xs leading-relaxed">
                   Sistem Manajemen Surat Masuk Digital<br/>
-                  <span className="text-white/25">© 2025 e-SuratMasuk</span>
+                  <span className="text-white/25">© 2025 SIDISMA</span>
                 </p>
               </div>
             </div>
@@ -277,7 +277,7 @@ export default function LoginPage() {
                   <img src="/logomts.png" alt="" className="w-full h-full object-cover"
                     onError={e => { e.target.style.display="none"; }} />
                 </div>
-                <span className="font-black text-gray-900 text-base tracking-tight">e-Surat<span style={{ color: "#6D9E51" }}>Masuk</span></span>
+                <span className="font-black text-gray-900 text-base tracking-tight">SI<span style={{ color: "#6D9E51" }}>DISMA</span></span>
               </div>
 
               {/* Back link */}

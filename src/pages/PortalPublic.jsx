@@ -655,7 +655,7 @@ function Navbar({ activeSection }) {
               }}
             />
           </div>
-          <span className="font-black text-gray-900 text-xl tracking-tight">e-Surat<span className="text-[#6D9E51]">Masuk</span></span>
+          <span className="font-black text-gray-900 text-xl tracking-tight">SI<span className="text-[#6D9E51]">DISMA</span></span>
         </div>
 
         {/* Desktop Nav */}
@@ -909,10 +909,10 @@ export default function PortalPublic() {
             <span className="inline-block bg-[#FEFFD3] border border-[#BCD9A2] text-[#6D9E51] text-sm font-bold px-4 py-1.5 rounded-full mb-6">Tentang Kami</span>
             <h2 className="text-4xl sm:text-5xl font-black text-gray-900 leading-tight mb-6">
               Portal Surat Masuk<br />
-              <span className="gradient-text">Pemerintah Digital</span>
+              <span className="gradient-text">MTsN 1 Pekanbaru</span>
             </h2>
             <p className="text-gray-500 leading-relaxed text-base sm:text-lg mb-8">
-              Kami hadir sebagai solusi modern untuk pengiriman dan manajemen surat masuk instansi pemerintah.
+              Kami hadir sebagai solusi modern untuk pengiriman dan manajemen surat masuk pada MTsN 1 Pekanbaru.
               Dengan teknologi terkini, kami memastikan setiap surat terproses dengan tepat, cepat, dan dapat dilacak secara real-time.
             </p>
             <div className="grid grid-cols-2 gap-4 sm:gap-5">
@@ -1152,7 +1152,7 @@ export default function PortalPublic() {
                     onError={(e) => { e.target.style.display = "none"; e.target.parentElement.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" class="w-5 h-5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>`; }}
                   />
                 </div>
-                <span className="font-black text-white text-xl">e-SuratMasuk</span>
+                <span className="font-black text-white text-xl">SIDISMA</span>
               </div>
               <p className="text-sm leading-relaxed">Portal digital pengiriman surat masuk digital MTsN 1 Kota Pekanbaru. Efisien, transparan, dan modern.</p>
             </div>
@@ -1224,7 +1224,7 @@ export default function PortalPublic() {
 
           </div>
           <div className="border-t border-gray-800 pt-8 text-center">
-            <p className="text-sm">© 2025 e-SuratMasuk · MTsN 1 Kota Pekanbaru</p>
+            <p className="text-sm">© 2025 SIDISMA · MTsN 1 Kota Pekanbaru</p>
           </div>
         </div>
       </footer>
