@@ -1224,7 +1224,7 @@ export default function PortalPublic() {
 
           </div>
           <div className="border-t border-gray-800 pt-8 text-center">
-            <p className="text-sm">© 2025 SIDISMA · MTsN 1 Kota Pekanbaru</p>
+            <p className="text-sm">© 2026 SIDISMA · MTsN 1 Kota Pekanbaru</p>
           </div>
         </div>
       </footer>
