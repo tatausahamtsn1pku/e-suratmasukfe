@@ -261,7 +261,7 @@ export default function LoginPage() {
               <div className="relative z-10 px-6 pb-6 pt-4">
                 <p className="text-white/40 text-xs leading-relaxed">
                   Sistem Manajemen Surat Masuk Digital<br/>
-                  <span className="text-white/25">© 2025 SIDISMA</span>
+                  <span className="text-white/25">© 2026 SIDISMA</span>
                 </p>
               </div>
             </div>
