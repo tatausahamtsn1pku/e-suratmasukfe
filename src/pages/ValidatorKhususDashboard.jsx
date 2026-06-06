@@ -5,7 +5,7 @@ import {
 } from "recharts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const API_BASE = "https://e-suratmasuk-production.up.railway.app";
+const API_BASE = "https://e-suratmasuk.onrender.com";
 
 // ─── Status Map ───────────────────────────────────────────────────────────────
 const STATUS_MAP = {

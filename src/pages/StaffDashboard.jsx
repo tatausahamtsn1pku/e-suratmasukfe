@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Cell } from "recharts";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const API_BASE = "https://e-suratmasuk-production.up.railway.app";
+const API_BASE = "https://e-suratmasuk.onrender.com";
 
 // ─── Status Map ───────────────────────────────────────────────────────────────
 const STATUS_MAP = {
